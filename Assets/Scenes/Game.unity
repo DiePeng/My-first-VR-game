@@ -41501,33 +41501,13 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 570397010116712449, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
-      propertyPath: m_IsActive
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 574849603279881131, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
-      propertyPath: m_IsActive
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 3043768720277612182, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
-      propertyPath: m_IsActive
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4868374885545047306, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5591237759516171777, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
       propertyPath: m_Name
       value: TargetChair
-      objectReference: {fileID: 0}
-    - target: {fileID: 6986033505493858166, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
-      propertyPath: m_IsActive
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7268157241414223234, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
-      propertyPath: m_IsActive
-      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7414545749060376205, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
       propertyPath: m_LocalPosition.x
@@ -41568,10 +41548,6 @@ PrefabInstance:
     - target: {fileID: 7414545749060376205, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8993745809998464079, guid: 8678851492dfbba4188cfcc72f6f31d0, type: 3}
-      propertyPath: m_IsActive
-      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
