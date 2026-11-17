@@ -25,6 +25,7 @@ namespace FurnitureAssembly.Editor
         static int completionEvents;
         static double nextCheck;
         static Vector3 beforeMovingGrip;
+        static bool previousRunInBackground;
 
         [MenuItem("Tools/Furniture Assembly/Validate XR Release Assembly (Play Mode)")]
         public static void Run()
@@ -41,19 +42,26 @@ namespace FurnitureAssembly.Editor
             var instance = UnityEngine.Object.Instantiate(prefab, new Vector3(100f, 3f, 100f), Quaternion.identity);
             instance.name = "XR Assembly Validation";
             controller = instance.GetComponent<ChairAssemblyController>();
+            previousRunInBackground = Application.runInBackground;
+            Application.runInBackground = true;
             controller.AssemblyCompleted += OnCompleted;
             foreach (var group in controller.Groups)
             {
                 group.Body.useGravity = false;
                 group.Body.isKinematic = true;
+                // Test setup teleports parts between attempts; avoid rendering an old physics pose.
+                group.Body.interpolation = RigidbodyInterpolation.None;
             }
             target = controller.Groups.First(group => group.Parts[0].Name == "RearLeg_Left");
             target.transform.SetPositionAndRotation(new Vector3(100f, 3f, 100f), Quaternion.Euler(0f, 37f, 0f));
-            right = CreateInteractor("Validation right grip", target.Parts[0].Transform.position);
-            left = CreateInteractor("Validation left grip", target.Parts[0].Transform.position);
+            target.Body.position = target.transform.position;
+            target.Body.rotation = target.transform.rotation;
+            Physics.SyncTransforms();
+            right = CreateInteractor("Validation right grip", target.Parts[0].Colliders[0].bounds.center);
+            left = CreateInteractor("Validation left grip", target.Parts[0].Colliders[0].bounds.center);
             right.StartManualInteraction((IXRSelectInteractable)target.Grab);
             Check(target.Grab.isSelected, "The stationary combination must be held.");
-            nextCheck = EditorApplication.timeSinceStartup + 0.1;
+            nextCheck = Time.timeAsDouble + 0.1;
             EditorApplication.update += Tick;
         }
 
@@ -74,7 +82,8 @@ namespace FurnitureAssembly.Editor
                 Cleanup();
                 return;
             }
-            if (EditorApplication.timeSinceStartup < nextCheck)
+            EditorApplication.QueuePlayerLoopUpdate();
+            if (Time.timeAsDouble < nextCheck)
                 return;
             try
             {
@@ -95,6 +104,12 @@ namespace FurnitureAssembly.Editor
                         phase = 3;
                         break;
                     case 3:
+                        var heldPart = controller.Groups.First(group => group.Parts.Count == 1 &&
+                            group.Parts[0].Name == InstallOrder[step]);
+                        float heldError;
+                        Check(controller.CanJoin(heldPart, target, out heldError),
+                            $"Held {InstallOrder[step]} must stay aligned before release. Error {heldError}, " +
+                            $"angle {Quaternion.Angle(heldPart.transform.rotation, target.transform.rotation)}.");
                         Check(controller.GetComponentsInChildren<MeshRenderer>().Any(renderer =>
                             renderer.name.StartsWith("JointHint_", StringComparison.Ordinal) && renderer.gameObject.activeSelf),
                             "Matching interfaces should show visual hints while held.");
@@ -102,7 +117,8 @@ namespace FurnitureAssembly.Editor
                         phase = 4;
                         break;
                     case 4:
-                        Check(controller.Groups.Count == 6 - step, "A real XRI release must merge exactly two groups.");
+                        Check(controller.Groups.Count == 6 - step,
+                            $"Release {step + 1} must produce {6 - step} groups, found {controller.Groups.Count}.");
                         Check(target.Parts.Count == step + 2, "All previously installed members must remain attached.");
                         Check(target.Grab.isSelected && right.hasSelection, "The other hand must retain its grip.");
                         Check(target.GetComponentsInChildren<Rigidbody>().Length == 1, "The combination has one body.");
@@ -134,7 +150,7 @@ namespace FurnitureAssembly.Editor
                         Cleanup();
                         return;
                 }
-                nextCheck = EditorApplication.timeSinceStartup + (phase == 4 ? 0.25 : 0.1);
+                nextCheck = Time.timeAsDouble + (phase == 4 ? 0.25 : 0.1);
             }
             catch (Exception exception)
             {
@@ -147,15 +163,20 @@ namespace FurnitureAssembly.Editor
         {
             var moving = controller.Groups.First(group => group.Parts.Count == 1 &&
                 group.Parts[0].Name == InstallOrder[step]);
-            moving.transform.SetPositionAndRotation(target.transform.position + Vector3.right * 0.015f,
-                target.transform.rotation * Quaternion.Euler(0f, wrongAngle ? 35f : 0f, 0f));
             if (!moving.Body.isKinematic)
             {
                 moving.Body.linearVelocity = Vector3.zero;
                 moving.Body.angularVelocity = Vector3.zero;
                 moving.Body.isKinematic = true;
             }
-            left.transform.SetPositionAndRotation(moving.Parts[0].Transform.position, moving.transform.rotation);
+            Vector3 position = target.transform.position + Vector3.right * 0.015f;
+            Quaternion rotation = target.transform.rotation * Quaternion.Euler(0f, wrongAngle ? 35f : 0f, 0f);
+            moving.transform.SetPositionAndRotation(position, rotation);
+            moving.Body.position = position;
+            moving.Body.rotation = rotation;
+            Physics.SyncTransforms();
+            // Grab solid wood, rather than the empty center of a frame or backrest.
+            left.transform.SetPositionAndRotation(moving.Parts[0].Colliders[0].bounds.center, rotation);
             left.StartManualInteraction((IXRSelectInteractable)moving.Grab);
             Check(moving.Grab.isSelected, "The moving part must be held before release.");
         }
@@ -173,6 +194,7 @@ namespace FurnitureAssembly.Editor
             EditorApplication.update -= Tick;
             if (controller != null)
             {
+                Application.runInBackground = previousRunInBackground;
                 controller.enabled = false;
                 controller.AssemblyCompleted -= OnCompleted;
                 // Grabbed roots can be temporarily detached by XRI, so clean up every owned group.
