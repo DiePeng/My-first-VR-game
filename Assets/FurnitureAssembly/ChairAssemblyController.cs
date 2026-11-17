@@ -108,7 +108,13 @@ namespace FurnitureAssembly
             Vector3 offset = index == 0 ? Vector3.zero :
                 Quaternion.Euler(0f, angle, 0f) * Vector3.forward * scatterRadius;
             var part = group.Parts[0];
-            Quaternion rotation = transform.rotation * Quaternion.Euler(0f, angle + 15f, 90f);
+            Quaternion restingRotation = Quaternion.identity;
+            if (part.Name.StartsWith("FrontLeg_", StringComparison.Ordinal) ||
+                part.Name.StartsWith("RearLeg_", StringComparison.Ordinal))
+                restingRotation = Quaternion.Euler(0f, 0f, 90f);
+            else if (part.Name == "Backrest")
+                restingRotation = Quaternion.Euler(90f, 0f, 0f);
+            Quaternion rotation = transform.rotation * Quaternion.Euler(0f, angle + 15f, 0f) * restingRotation;
             Vector3 center = transform.TransformPoint(offset);
             float floor = transform.position.y;
             var hits = Physics.RaycastAll(center + Vector3.up * 0.2f, Vector3.down, 3f,
