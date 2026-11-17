@@ -21,6 +21,7 @@ namespace FurnitureAssembly
         readonly List<ReleaseRequest> releases = new List<ReleaseRequest>();
         readonly List<GameObject> markers = new List<GameObject>();
         Material markerMaterial;
+        MaterialPropertyBlock markerProperties;
         AudioClip snapSound;
         AudioClip completionSound;
         bool initialized;
@@ -275,7 +276,10 @@ namespace FurnitureAssembly
         {
             snapSound = CreateTone("Chair joint click", 700f, 0.09f);
             completionSound = CreateTone("Chair assembled", 1050f, 0.5f);
-            markerMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            // Reuse a referenced shader so build-time shader stripping cannot remove the hints.
+            markerMaterial = new Material(parts["Seat"].Transform.GetComponent<MeshRenderer>().sharedMaterial);
+            markerMaterial.EnableKeyword("_EMISSION");
+            markerProperties = new MaterialPropertyBlock();
             foreach (var joint in joints)
             {
                 for (int i = 0; i < 2; i++)
@@ -287,7 +291,10 @@ namespace FurnitureAssembly
                     var collider = marker.GetComponent<Collider>();
                     collider.enabled = false;
                     if (Application.isPlaying) Destroy(collider); else DestroyImmediate(collider);
-                    marker.GetComponent<Renderer>().sharedMaterial = markerMaterial;
+                    var renderer = marker.GetComponent<Renderer>();
+                    renderer.sharedMaterial = markerMaterial;
+                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    renderer.receiveShadows = false;
                     marker.SetActive(false);
                     markers.Add(marker);
                 }
@@ -308,14 +315,15 @@ namespace FurnitureAssembly
             }
         }
 
-        static void SetMarker(GameObject marker, bool show, Vector3 position, bool aligned)
+        void SetMarker(GameObject marker, bool show, Vector3 position, bool aligned)
         {
             marker.SetActive(show);
             if (!show) return;
             marker.transform.position = position;
-            var properties = new MaterialPropertyBlock();
-            properties.SetColor("_BaseColor", aligned ? Color.green : new Color(1f, 0.65f, 0.1f));
-            marker.GetComponent<Renderer>().SetPropertyBlock(properties);
+            Color color = aligned ? Color.green : new Color(1f, 0.65f, 0.1f);
+            markerProperties.SetColor("_BaseColor", color);
+            markerProperties.SetColor("_EmissionColor", color * 0.6f);
+            marker.GetComponent<Renderer>().SetPropertyBlock(markerProperties);
         }
 
         void PlayConnectionFeedback(ChairAssemblyGroup target, IXRSelectInteractor releasedBy)
