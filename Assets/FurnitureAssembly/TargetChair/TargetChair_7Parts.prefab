@@ -1249,6 +1249,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7414545749060376205}
+  - component: {fileID: 900000000000000001}
   m_Layer: 0
   m_Name: TargetChair_7Parts
   m_TagString: Untagged
@@ -2428,3 +2429,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.0275, y: 0.062, z: 0.024}
   m_Center: {x: 0.013750003, y: 0.44, z: 0.000000007152557}
+--- !u!114 &900000000000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5591237759516171777}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d8a6f950e1249679e676ad60b294d49, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  snapDistance: 0.05
+  snapAngle: 15
+  snapDuration: 0.12
+  scatterRadius: 1.05
