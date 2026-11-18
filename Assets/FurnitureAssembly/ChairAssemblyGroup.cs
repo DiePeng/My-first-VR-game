@@ -8,13 +8,26 @@ namespace FurnitureAssembly
     /// <summary>A connected set of chair parts with one physics body and one grab target.</summary>
     public sealed class ChairAssemblyGroup : MonoBehaviour
     {
-        public readonly List<ChairAssemblyPart> Parts = new List<ChairAssemblyPart>();
+        [SerializeField] List<ChairAssemblyPart> parts = new List<ChairAssemblyPart>();
+        public List<ChairAssemblyPart> Parts => parts;
         public Rigidbody Body { get; private set; }
         public XRGrabInteractable Grab { get; private set; }
         public ChairAssemblyController Owner { get; private set; }
         public Vector3 RecoveryPosition { get; set; }
         public Quaternion RecoveryRotation { get; set; }
 
+        public void Bind(ChairAssemblyController owner)
+        {
+            Owner = owner;
+            Body = GetComponent<Rigidbody>();
+            Grab = GetComponent<XRGrabInteractable>();
+            if (Body == null || Grab == null)
+                throw new System.InvalidOperationException($"{name} needs authored Rigidbody and XRGrabInteractable components.");
+            Grab.selectExited.RemoveListener(OnReleased);
+            Grab.selectExited.AddListener(OnReleased);
+        }
+
+#if UNITY_EDITOR
         public void Initialize(ChairAssemblyController owner)
         {
             Owner = owner;
@@ -33,6 +46,8 @@ namespace FurnitureAssembly
             Grab.throwOnDetach = false;
             Grab.selectExited.AddListener(OnReleased);
         }
+
+#endif
 
         public void AddPart(ChairAssemblyPart part)
         {
@@ -62,6 +77,7 @@ namespace FurnitureAssembly
         }
     }
 
+    [System.Serializable]
     public sealed class ChairAssemblyPart
     {
         public string Name;

@@ -13,7 +13,9 @@ namespace FurnitureAssembly
         [SerializeField, Min(0.005f)] float snapDistance = 0.05f;
         [SerializeField, Range(1f, 45f)] float snapAngle = 15f;
         [SerializeField, Min(0.01f)] float snapDuration = 0.12f;
+        #if UNITY_EDITOR
         [SerializeField, Min(0.5f)] float scatterRadius = 1.05f;
+#endif
 
         readonly List<ChairAssemblyGroup> groups = new List<ChairAssemblyGroup>();
         readonly List<ChairAssemblyJoint> joints = new List<ChairAssemblyJoint>();
@@ -39,12 +41,48 @@ namespace FurnitureAssembly
             public int Frame;
         }
 
-        void Awake() => InitializeAssembly(true);
-
-        public void InitializeAssembly(bool scatter)
+        void Awake()
         {
-            if (initialized)
-                return;
+            foreach (var group in GetComponentsInChildren<ChairAssemblyGroup>(true))
+            {
+                group.Bind(this);
+                groups.Add(group);
+                foreach (var part in group.Parts)
+                {
+                    part.Group = group;
+                    parts.Add(part.Name, part);
+                }
+                group.RecoveryPosition = group.transform.position;
+                group.RecoveryRotation = group.transform.rotation;
+            }
+            if (parts.Count != 7)
+                throw new InvalidOperationException("TargetChair requires seven parts configured in Edit Mode.");
+            BuildJoints();
+            CreateFeedback();
+            initialized = true;
+        }
+
+        void BuildJoints()
+        {
+            foreach (float side in new[] { -1f, 1f })
+            {
+                string suffix = side < 0 ? "Left" : "Right";
+                AddJoint("SeatSupport", "FrontLeg_" + suffix, new Vector3(side * 0.161f, 0.43f, 0.17f));
+                AddJoint("SeatSupport", "RearLeg_" + suffix, new Vector3(side * 0.161f, 0.43f, -0.18f));
+                AddJoint("Seat", "FrontLeg_" + suffix, new Vector3(side * 0.175f, 0.4675f, 0.17f));
+                AddJoint("Seat", "SeatSupport", new Vector3(side * 0.1f, 0.4675f, 0.17f));
+                AddJoint("Seat", "SeatSupport", new Vector3(side * 0.1f, 0.4675f, -0.18f));
+                AddJoint("Backrest", "RearLeg_" + suffix, new Vector3(side * 0.161f, 0.5825f, -0.18f));
+                AddJoint("Backrest", "RearLeg_" + suffix, new Vector3(side * 0.161f, 0.925f, -0.18f));
+            }
+        }
+
+#if UNITY_EDITOR
+
+        public void PrepareInEditor()
+        {
+            if (Application.isPlaying || GetComponentsInChildren<ChairAssemblyGroup>(true).Length != 0)
+                throw new InvalidOperationException("Prepare an unconfigured chair in Edit Mode only.");
 
             string[] names = { "Seat", "SeatSupport", "FrontLeg_Left", "FrontLeg_Right",
                 "RearLeg_Left", "RearLeg_Right", "Backrest" };
@@ -63,21 +101,6 @@ namespace FurnitureAssembly
                 });
             }
 
-            // Measured from the existing mortises, tenons and part transforms.
-            // The frame has four leg connections, and four upward seat tenons.
-            foreach (float side in new[] { -1f, 1f })
-            {
-                string suffix = side < 0 ? "Left" : "Right";
-                AddJoint("SeatSupport", "FrontLeg_" + suffix, new Vector3(side * 0.161f, 0.43f, 0.17f));
-                AddJoint("SeatSupport", "RearLeg_" + suffix, new Vector3(side * 0.161f, 0.43f, -0.18f));
-                AddJoint("Seat", "FrontLeg_" + suffix, new Vector3(side * 0.175f, 0.4675f, 0.17f));
-                AddJoint("Seat", "SeatSupport", new Vector3(side * 0.1f, 0.4675f, 0.17f));
-                AddJoint("Seat", "SeatSupport", new Vector3(side * 0.1f, 0.4675f, -0.18f));
-                // Both backrest rails must fit the same rear leg at once.
-                AddJoint("Backrest", "RearLeg_" + suffix, new Vector3(side * 0.161f, 0.5825f, -0.18f));
-                AddJoint("Backrest", "RearLeg_" + suffix, new Vector3(side * 0.161f, 0.925f, -0.18f));
-            }
-
             for (int i = 0; i < names.Length; i++)
             {
                 var part = parts[names[i]];
@@ -87,21 +110,20 @@ namespace FurnitureAssembly
                 group.Initialize(this);
                 group.AddPart(part);
                 groups.Add(group);
-                if (scatter)
-                    Scatter(group, i);
+                Scatter(group, i);
                 group.RecoveryPosition = root.transform.position;
                 group.RecoveryRotation = root.transform.rotation;
                 group.RebuildGrab();
             }
-            CreateFeedback();
-            initialized = true;
         }
+#endif
 
         void AddJoint(string first, string second, Vector3 anchor)
         {
             joints.Add(new ChairAssemblyJoint(parts[first], parts[second], anchor));
         }
 
+#if UNITY_EDITOR
         void Scatter(ChairAssemblyGroup group, int index)
         {
             // Lay long parts flat, distributed around the original chair footprint.
@@ -137,6 +159,8 @@ namespace FurnitureAssembly
                 bottom = Mathf.Min(bottom, collider.bounds.min.y);
             group.transform.position += Vector3.up * (floor + 0.025f - bottom);
         }
+
+#endif
 
         public bool CanJoin(ChairAssemblyGroup first, ChairAssemblyGroup second,
             out float error)
