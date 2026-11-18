@@ -2,12 +2,55 @@ namespace FurnitureAssembly.Editor
 {
     public static class ChairAssemblyValidation
     {
+        public static void ValidateAuthoredLayout()
+        {
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.GameObject>(
+                "Assets/FurnitureAssembly/TargetChair/TargetChair_7Parts.prefab");
+            var parent = new UnityEngine.GameObject("Authored layout validation");
+            parent.SetActive(false);
+            try
+            {
+                var instance = UnityEngine.Object.Instantiate(prefab, parent.transform);
+                var groups = instance.GetComponentsInChildren<ChairAssemblyGroup>(true);
+                if (groups.Length != 7)
+                    throw new System.Exception("The prefab must contain seven authored groups.");
+                var positions = new UnityEngine.Vector3[groups.Length];
+                var rotations = new UnityEngine.Quaternion[groups.Length];
+                for (int i = 0; i < groups.Length; i++)
+                {
+                    groups[i].transform.localPosition += new UnityEngine.Vector3(i * 0.13f, 0.4f, 0.2f);
+                    groups[i].transform.localRotation *= UnityEngine.Quaternion.Euler(13f, 27f, 19f);
+                    positions[i] = groups[i].transform.localPosition;
+                    rotations[i] = groups[i].transform.localRotation;
+                    groups[i].GetComponent<UnityEngine.Rigidbody>().isKinematic = true;
+                    if (groups[i].GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable>() == null)
+                        throw new System.Exception("Every authored group must already have its grab component.");
+                }
+                parent.SetActive(true);
+                var controller = instance.GetComponent<ChairAssemblyController>();
+                if (controller.Groups.Count != 7 || instance.GetComponentsInChildren<UnityEngine.Rigidbody>().Length != 7)
+                    throw new System.Exception("Startup must reuse authored groups and bodies.");
+                for (int i = 0; i < groups.Length; i++)
+                {
+                    if (UnityEngine.Vector3.Distance(positions[i], groups[i].transform.localPosition) > 0.0001f ||
+                        UnityEngine.Quaternion.Angle(rotations[i], groups[i].transform.localRotation) > 0.001f)
+                        throw new System.Exception("Startup changed a manually authored part pose.");
+                }
+                UnityEngine.Debug.Log("Authored chair layout validation passed: seven preconfigured grab groups and all manual poses preserved at startup.");
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(parent);
+            }
+        }
+
         [UnityEditor.MenuItem("Tools/Furniture Assembly/Validate Free Assembly (Play Mode)")]
         public static void ValidateFreeAssembly()
         {
             if (!UnityEditor.EditorApplication.isPlaying)
                 throw new System.InvalidOperationException("Enter Play Mode before validating XR assembly.");
             
+            ValidateAuthoredLayout();
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.GameObject>("Assets/FurnitureAssembly/TargetChair/TargetChair_7Parts.prefab");
             int assertions = 0;
             System.Action<bool,string> check = (ok,message) => { if (!ok) throw new System.Exception(message); assertions++; };

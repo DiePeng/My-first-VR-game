@@ -13,7 +13,7 @@ namespace FurnitureAssembly
         [SerializeField, Min(0.005f)] float snapDistance = 0.05f;
         [SerializeField, Range(1f, 45f)] float snapAngle = 15f;
         [SerializeField, Min(0.01f)] float snapDuration = 0.12f;
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         [SerializeField, Min(0.5f)] float scatterRadius = 1.05f;
 #endif
 
