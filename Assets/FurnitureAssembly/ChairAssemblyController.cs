@@ -33,6 +33,7 @@ namespace FurnitureAssembly
         public IReadOnlyList<ChairAssemblyJoint> Joints => joints;
         public bool IsComplete { get; private set; }
         public event Action AssemblyCompleted;
+        public event Action AssemblyChanged;
 
         struct ReleaseRequest
         {
@@ -294,6 +295,7 @@ namespace FurnitureAssembly
                 IsComplete = true;
                 AssemblyCompleted?.Invoke();
             }
+            AssemblyChanged?.Invoke();
         }
 
         void CreateFeedback()
