@@ -166,24 +166,13 @@ namespace FurnitureAssembly
         public bool CanJoin(ChairAssemblyGroup first, ChairAssemblyGroup second,
             out float error)
         {
-            error = 0f;
+            error = float.PositiveInfinity;
             if (first == null || second == null || first == second ||
-                !groups.Contains(first) || !groups.Contains(second) ||
-                Quaternion.Angle(first.transform.rotation, second.transform.rotation) > snapAngle)
+                !groups.Contains(first) || !groups.Contains(second))
                 return false;
-
-            bool hasConnection = false;
-            foreach (var joint in joints)
-            {
-                if (!joint.Joins(first, second))
-                    continue;
-                hasConnection = true;
-                float distance = Vector3.Distance(joint.PositionOn(first), joint.PositionOn(second));
-                error = Mathf.Max(error, distance);
-                if (distance > snapDistance)
-                    return false;
-            }
-            return hasConnection;
+            var alignment = ChairAssemblyAlignment.Find(first, second, joints, snapDistance, snapAngle);
+            error = alignment.Distance;
+            return alignment.HasJoint && alignment.Distance <= snapDistance && alignment.Angle <= snapAngle;
         }
 
         public void QueueRelease(ChairAssemblyGroup group, IXRSelectInteractor interactor)
@@ -244,6 +233,8 @@ namespace FurnitureAssembly
             merging = true;
             moving.Grab.enabled = false;
             moving.Body.isKinematic = true;
+            var alignment = ChairAssemblyAlignment.Find(moving, target, joints, snapDistance, snapAngle);
+            if (alignment.FirstFlipped) ChairAssemblyAlignment.Reframe(moving);
             Vector3 startPosition = moving.transform.position;
             Quaternion startRotation = moving.transform.rotation;
             float elapsed = 0f;
@@ -251,11 +242,13 @@ namespace FurnitureAssembly
             {
                 elapsed += Time.deltaTime;
                 float t = Mathf.SmoothStep(0f, 1f, elapsed / snapDuration);
-                moving.transform.SetPositionAndRotation(Vector3.Lerp(startPosition, target.transform.position, t),
-                    Quaternion.Slerp(startRotation, target.transform.rotation, t));
+                var destination = ChairAssemblyAlignment.Frame(target, alignment.SecondFlipped);
+                moving.transform.SetPositionAndRotation(Vector3.Lerp(startPosition, destination.position, t),
+                    Quaternion.Slerp(startRotation, destination.rotation, t));
                 yield return null;
             }
-            moving.transform.SetPositionAndRotation(target.transform.position, target.transform.rotation);
+            var finalPose = ChairAssemblyAlignment.Frame(target, alignment.SecondFlipped);
+            moving.transform.SetPositionAndRotation(finalPose.position, finalPose.rotation);
             MergeGroups(moving, target);
             PlayConnectionFeedback(target, releasedBy);
             merging = false;
@@ -266,17 +259,26 @@ namespace FurnitureAssembly
         {
             if (!CanJoin(moving, target, out _))
                 throw new InvalidOperationException("Chair groups do not have matching aligned joints.");
+            var alignment = ChairAssemblyAlignment.Find(moving, target, joints, snapDistance, snapAngle);
             bool previousMerging = merging;
             merging = true;
             IXRSelectInteractor heldBy = target.Grab.isSelected ? target.Grab.interactorsSelecting[0] : null;
             moving.Grab.enabled = false;
             target.Grab.enabled = false;
             target.Body.isKinematic = true;
+            if (alignment.FirstFlipped) ChairAssemblyAlignment.Reframe(moving);
+            if (alignment.SecondFlipped) ChairAssemblyAlignment.Reframe(target);
             moving.transform.SetPositionAndRotation(target.transform.position, target.transform.rotation);
             foreach (var part in moving.Parts)
                 target.AddPart(part);
             moving.Parts.Clear();
             groups.Remove(moving);
+            parts.Clear();
+            foreach (var group in groups)
+                foreach (var part in group.Parts)
+                    parts.Add(part.Name, part);
+            joints.Clear();
+            BuildJoints();
             target.RecoveryPosition = target.transform.position + Vector3.up * 0.15f;
             target.RecoveryRotation = target.transform.rotation;
             target.RebuildGrab();
@@ -334,11 +336,54 @@ namespace FurnitureAssembly
                 var joint = joints[i];
                 bool held = joint.A.Group.Grab.isSelected || joint.B.Group.Grab.isSelected;
                 bool show = !joint.Connected && held &&
-                    Vector3.Distance(joint.PositionOn(joint.A.Group), joint.PositionOn(joint.B.Group)) < 0.3f;
-                bool aligned = show && CanJoin(joint.A.Group, joint.B.Group, out _);
-                SetMarker(markers[i * 2], show, joint.PositionOn(joint.A.Group), aligned);
-                SetMarker(markers[i * 2 + 1], show, joint.PositionOn(joint.B.Group), aligned);
+                    NearestJointDistance(joint.A.Group, joint.B.Group) < 0.3f;
+                if (!show)
+                {
+                    SetMarker(markers[i * 2], false, Vector3.zero, false);
+                    SetMarker(markers[i * 2 + 1], false, Vector3.zero, false);
+                    continue;
+                }
+                var pose = ChairAssemblyAlignment.Find(joint.A.Group, joint.B.Group, joints, snapDistance, snapAngle);
+                bool aligned = pose.HasJoint && pose.Distance <= snapDistance && pose.Angle <= snapAngle;
+                SetMarker(markers[i * 2], show,
+                    ChairAssemblyAlignment.Point(joint.A.Group, pose.FirstFlipped, joint.Anchor), aligned);
+                SetMarker(markers[i * 2 + 1], show,
+                    ChairAssemblyAlignment.Point(joint.B.Group, pose.SecondFlipped, joint.Anchor), aligned);
             }
+        }
+
+        float NearestJointDistance(ChairAssemblyGroup first, ChairAssemblyGroup second)
+        {
+            return ChairAssemblyAlignment.Find(first, second, joints, snapDistance, snapAngle).Nearest;
+        }
+
+        public string AlignmentHint()
+        {
+            ChairAssemblyGroup moving = null;
+            ChairAssemblyGroup target = null;
+            float nearest = 0.3f;
+            foreach (var first in groups)
+            {
+                if (!first.Grab.isSelected) continue;
+                foreach (var second in groups)
+                {
+                    if (first == second) continue;
+                    float distance = NearestJointDistance(first, second);
+                    if (distance >= nearest) continue;
+                    nearest = distance;
+                    moving = first;
+                    target = second;
+                }
+            }
+            if (moving == null) return null;
+            float angle = ChairAssemblyAlignment.Find(moving, target, joints, snapDistance, snapAngle).Angle;
+            if (angle > snapAngle)
+                return $"Turn the held piece to match the joints.\nRotation to align: {Mathf.RoundToInt(angle)} degrees.";
+            if (CanJoin(moving, target, out _))
+                return "All matching joints are aligned.\nRelease Grip to connect the pieces.";
+            return nearest > snapDistance ?
+                "Bring the matching joints closer.\nMatch every pair of highlighted markers." :
+                "One joint is close. Align the other end too.\nAll matching markers must turn green.";
         }
 
         void SetMarker(GameObject marker, bool show, Vector3 position, bool aligned)

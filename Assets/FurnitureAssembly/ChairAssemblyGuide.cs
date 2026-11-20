@@ -11,6 +11,9 @@ namespace FurnitureAssembly
         [SerializeField] GameObject completion;
         [SerializeField] TMP_Text progressLabel;
         [SerializeField] Image progressFill;
+        TMP_Text alignmentText;
+        string defaultAlignmentText;
+        float nextHintRefresh;
 
         public void Configure(ChairAssemblyController controller, GameObject instructionContent,
             GameObject completionContent, TMP_Text label, Image fill)
@@ -35,6 +38,25 @@ namespace FurnitureAssembly
         }
 
         void Start() => Refresh();
+
+        void Update()
+        {
+            if (Time.unscaledTime < nextHintRefresh || assembly == null || assembly.IsComplete)
+                return;
+            nextHintRefresh = Time.unscaledTime + 0.1f;
+            if (alignmentText == null && instructions != null)
+            {
+                foreach (var text in instructions.GetComponentsInChildren<TMP_Text>(true))
+                    if (text.name == "ALIGN & RELEASE description")
+                    {
+                        alignmentText = text;
+                        defaultAlignmentText = text.text;
+                        break;
+                    }
+            }
+            if (alignmentText != null)
+                alignmentText.text = assembly.AlignmentHint() ?? defaultAlignmentText;
+        }
 
         void OnDisable()
         {

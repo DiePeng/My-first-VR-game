@@ -26,6 +26,14 @@ namespace FurnitureAssembly.Editor
         static double nextCheck;
         static Vector3 beforeMovingGrip;
         static bool previousRunInBackground;
+        static bool symmetricTrial;
+
+        [MenuItem("Tools/Furniture Assembly/Validate Symmetric XR Release (Play Mode)")]
+        public static void RunSymmetric()
+        {
+            Run();
+            symmetricTrial = true;
+        }
 
         [MenuItem("Tools/Furniture Assembly/Validate XR Release Assembly (Play Mode)")]
         public static void Run()
@@ -36,6 +44,7 @@ namespace FurnitureAssembly.Editor
             assertions = 0;
             completionEvents = 0;
             step = 0;
+            symmetricTrial = false;
             phase = 0;
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/FurnitureAssembly/TargetChair/TargetChair_7Parts.prefab");
@@ -169,8 +178,10 @@ namespace FurnitureAssembly.Editor
                 moving.Body.angularVelocity = Vector3.zero;
                 moving.Body.isKinematic = true;
             }
-            Vector3 position = target.transform.position + Vector3.right * 0.015f;
-            Quaternion rotation = target.transform.rotation * Quaternion.Euler(0f, wrongAngle ? 35f : 0f, 0f);
+            // At this point the rear legs and backrest form the symmetric rear assembly.
+            var frame = ChairAssemblyAlignment.Frame(target, symmetricTrial && step == 2);
+            Vector3 position = frame.position + Vector3.right * 0.015f;
+            Quaternion rotation = frame.rotation * Quaternion.Euler(0f, wrongAngle ? 35f : 0f, 0f);
             moving.transform.SetPositionAndRotation(position, rotation);
             moving.Body.position = position;
             moving.Body.rotation = rotation;
